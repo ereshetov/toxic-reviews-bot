@@ -184,8 +184,6 @@ async def find_toxic_review() -> Optional[dict]:
 
 def format_review(review: dict) -> str:
     """Форматирование отзыва для отправки."""
-    stars = "⭐" * review["rating"]
-
     # Название и тип заведения
     text = f"🏢 <b>{review['place_name']}</b>"
     if review.get('place_type'):
@@ -205,10 +203,10 @@ def format_review(review: dict) -> str:
     text += f"👤 {review['author']}"
     if review.get('relative_time'):
         text += f" • {review['relative_time']}"
-    text += f"\n{stars}\n\n"
+    text += "\n\n"
 
     # Текст отзыва
-    text += f"💬 <i>{review['text']}</i>\n\n"
+    text += f"{review['text']}\n\n"
 
     # Ссылки
     text += f"🔗 <a href=\"{review['maps_url']}\">Заведение в Google Maps</a>"
