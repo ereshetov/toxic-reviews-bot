@@ -356,7 +356,7 @@ async def send_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await query.edit_message_reply_markup(reply_markup=None)
 
     # Отправляем статус поиска
-    status_msg = await query.message.reply_text("🔍 Ищу токсичный отзыв...")
+    status_msg = await query.message.reply_text("🔍 Подбираю отзыв...")
 
     review = await find_toxic_review()
 
@@ -376,7 +376,7 @@ async def send_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def review_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /review."""
-    msg = await update.message.reply_text("🔍 Ищу токсичный отзыв...")
+    msg = await update.message.reply_text("🔍 Подбираю отзыв...")
 
     review = await find_toxic_review()
 
