@@ -1,6 +1,7 @@
 import os
 import random
 import re
+from datetime import datetime
 from typing import Optional
 import httpx
 from dotenv import load_dotenv
@@ -11,6 +12,8 @@ load_dotenv()
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+JSONBIN_API_KEY = os.environ.get("JSONBIN_API_KEY")
+JSONBIN_BIN_ID = os.environ.get("JSONBIN_BIN_ID")
 
 # Города для поиска заведений (русскоязычные регионы)
 CITIES = [
@@ -27,6 +30,69 @@ PLACE_TYPES = ["restaurant", "cafe", "bar", "hotel", "store", "gym", "spa"]
 
 MIN_WORDS = 30  # Минимум слов в отзыве
 MAX_CHARS = 1000  # Максимум символов в отзыве
+
+
+# ===== Статистика (JSONBin) =====
+
+async def get_stats() -> dict:
+    """Получение статистики из JSONBin."""
+    if not JSONBIN_API_KEY or not JSONBIN_BIN_ID:
+        return {"total_users": 0, "total_requests": 0, "users": {}}
+
+    url = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}/latest"
+    headers = {"X-Master-Key": JSONBIN_API_KEY}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.json().get("record", {})
+    except Exception:
+        pass
+    return {"total_users": 0, "total_requests": 0, "users": {}}
+
+
+async def save_stats(stats: dict) -> None:
+    """Сохранение статистики в JSONBin."""
+    if not JSONBIN_API_KEY or not JSONBIN_BIN_ID:
+        return
+
+    url = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Master-Key": JSONBIN_API_KEY
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.put(url, json=stats, headers=headers)
+    except Exception:
+        pass
+
+
+async def track_user(user_id: int, is_request: bool = False) -> None:
+    """Трекинг пользователя и запросов."""
+    stats = await get_stats()
+    user_id_str = str(user_id)
+    now = datetime.utcnow().isoformat()
+
+    if user_id_str not in stats.get("users", {}):
+        # Новый пользователь
+        stats.setdefault("users", {})[user_id_str] = {
+            "first_seen": now,
+            "last_seen": now,
+            "request_count": 0
+        }
+        stats["total_users"] = stats.get("total_users", 0) + 1
+
+    # Обновляем данные пользователя
+    stats["users"][user_id_str]["last_seen"] = now
+
+    if is_request:
+        stats["users"][user_id_str]["request_count"] += 1
+        stats["total_requests"] = stats.get("total_requests", 0) + 1
+
+    await save_stats(stats)
 
 
 def count_words(text: str) -> int:
@@ -229,6 +295,9 @@ def get_start_keyboard() -> InlineKeyboardMarkup:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
+    # Трекинг нового пользователя
+    await track_user(update.effective_user.id)
+
     await update.message.reply_text(
         "👋 Привет!\n"
         "Я бот, который собирает реальные негативные отзывы на русском языке из Google Maps.\n\n"
@@ -243,6 +312,9 @@ async def send_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     """Отправка отзыва."""
     query = update.callback_query
     await query.answer()
+
+    # Трекинг запроса
+    await track_user(update.effective_user.id, is_request=True)
 
     # Убираем кнопку из старого сообщения
     await query.edit_message_reply_markup(reply_markup=None)
