@@ -22,10 +22,11 @@ CITIES = [
     "Баку", "Тбилиси", "Ереван", "Бишкек", "Душанбе"
 ]
 
-# Типы заведений
-PLACE_TYPES = ["restaurant", "cafe", "bar", "hotel", "store", "hospital", "gym", "spa"]
+# Типы заведений (без больниц)
+PLACE_TYPES = ["restaurant", "cafe", "bar", "hotel", "store", "gym", "spa"]
 
 MIN_WORDS = 30  # Минимум слов в отзыве
+MAX_CHARS = 1000  # Максимум символов в отзыве
 
 
 def count_words(text: str) -> int:
@@ -160,7 +161,7 @@ async def find_toxic_review() -> Optional[dict]:
             good_reviews = []
             for review in negative_reviews:
                 text = review.get("text", {}).get("text", "") if isinstance(review.get("text"), dict) else review.get("text", "")
-                if count_words(text) >= MIN_WORDS and is_russian(text):
+                if count_words(text) >= MIN_WORDS and len(text) <= MAX_CHARS and is_russian(text):
                     good_reviews.append({
                         "text": text,
                         "rating": review.get("rating", 1),
@@ -184,8 +185,8 @@ async def find_toxic_review() -> Optional[dict]:
 
 def format_review(review: dict) -> str:
     """Форматирование отзыва для отправки."""
-    # Название и тип заведения
-    text = f"🏢 <b>{review['place_name']}</b>"
+    # Название заведения (кликабельное)
+    text = f"🏢 <a href=\"{review['maps_url']}\">{review['place_name']}</a>"
     if review.get('place_type'):
         text += f" ({review['place_type']})"
     text += "\n"
@@ -199,19 +200,17 @@ def format_review(review: dict) -> str:
     if location_parts:
         text += f"📍 {', '.join(location_parts)}\n"
 
-    # Автор и время
-    text += f"👤 {review['author']}"
+    # Автор (кликабельный) и время
+    if review.get('author_url'):
+        text += f"👤 <a href=\"{review['author_url']}\">{review['author']}</a>"
+    else:
+        text += f"👤 {review['author']}"
     if review.get('relative_time'):
         text += f" • {review['relative_time']}"
     text += "\n\n"
 
     # Текст отзыва
-    text += f"{review['text']}\n\n"
-
-    # Ссылки
-    text += f"🔗 <a href=\"{review['maps_url']}\">Заведение в Google Maps</a>"
-    if review.get('author_url'):
-        text += f"\n👤 <a href=\"{review['author_url']}\">Профиль автора</a>"
+    text += f"{review['text']}"
 
     return text
 
@@ -222,12 +221,18 @@ def get_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_start_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для стартового сообщения."""
+    keyboard = [[InlineKeyboardButton("🚀 Погнали!", callback_data="more")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
     await update.message.reply_text(
         "👋 Привет! Я бот, который находит самые токсичные отзывы на русском языке.\n\n"
         "Нажми кнопку ниже, чтобы получить случайный негативный отзыв из Google Maps!",
-        reply_markup=get_keyboard()
+        reply_markup=get_start_keyboard()
     )
 
 
